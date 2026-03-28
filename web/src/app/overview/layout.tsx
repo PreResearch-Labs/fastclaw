@@ -1,5 +1,4 @@
-"use client";
-
+import { AuthGuard } from "@/components/auth-guard";
 import { SidebarLayout } from "@/components/sidebar";
 
 export default function OverviewLayout({
@@ -7,5 +6,9 @@ export default function OverviewLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <SidebarLayout>{children}</SidebarLayout>;
+  return (
+    <AuthGuard>
+      <SidebarLayout>{children}</SidebarLayout>
+    </AuthGuard>
+  );
 }
