@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fastclaw-ai/fastclaw/internal/api"
+	"github.com/fastclaw-ai/fastclaw/internal/auth"
 	"github.com/fastclaw-ai/fastclaw/internal/config"
 	"github.com/fastclaw-ai/fastclaw/internal/taskqueue"
 )
@@ -36,6 +37,7 @@ type Server struct {
 	agentProvider AgentProvider
 	taskQueue     *taskqueue.Queue
 	apiServer     *api.Server
+	auth          *auth.Auth
 	startedAt     time.Time
 }
 
@@ -70,44 +72,76 @@ func (s *Server) SetAPIServer(apiSrv *api.Server) {
 	s.apiServer = apiSrv
 }
 
+// SetAuth sets the authentication module for protected routes.
+func (s *Server) SetAuth(a *auth.Auth) {
+	s.auth = a
+}
+
 // Run starts the HTTP server and blocks until the context is canceled
 // or the setup is completed.
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
 	// API routes
+	// Status is public (no auth required)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
-	mux.HandleFunc("GET /api/config", s.handleGetConfig)
-	mux.HandleFunc("POST /api/config", s.handleUpdateConfig)
-	mux.HandleFunc("POST /api/test-provider", s.handleTestProvider)
-	mux.HandleFunc("POST /api/save-config", s.handleSaveConfig)
-	mux.HandleFunc("POST /api/chat", s.handleChat)
 
-	// Agent management
-	mux.HandleFunc("GET /api/agents", s.handleListAgents)
-	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
-	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
-	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
+	// Auth routes (public, no auth required)
+	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
+	mux.HandleFunc("GET /api/auth/me", s.handleGetCurrentUser)
+	mux.HandleFunc("PUT /api/auth/password", s.handleChangePassword)
 
-	// Skills
-	mux.HandleFunc("GET /api/skills", s.handleListSkills)
-	mux.HandleFunc("DELETE /api/skills/{name}", s.handleDeleteSkill)
+	// User management routes (admin only, wrapped with middleware)
+	if s.auth != nil && s.auth.Enabled {
+		mux.HandleFunc("GET /api/users", s.auth.AdminMiddleware(s.handleListUsers))
+		mux.HandleFunc("POST /api/users", s.auth.AdminMiddleware(s.handleCreateUser))
+		mux.HandleFunc("DELETE /api/users/{id}", s.auth.AdminMiddleware(s.handleDeleteUser))
+		mux.HandleFunc("PUT /api/users/{id}/password", s.auth.AdminMiddleware(s.handleResetUserPassword))
+	}
 
-	// Plugins
-	mux.HandleFunc("GET /api/plugins", s.handleListPlugins)
-	mux.HandleFunc("PUT /api/plugins/{id}", s.handleUpdatePlugin)
-
-	// Tasks
-	mux.HandleFunc("GET /api/tasks", s.handleListTasks)
-
-	// Channels
-	mux.HandleFunc("GET /api/channels", s.handleListChannels)
-
-	// Cron jobs
-	mux.HandleFunc("GET /api/cron", s.handleListCronJobs)
-	mux.HandleFunc("POST /api/cron", s.handleCreateCronJob)
-	mux.HandleFunc("PUT /api/cron/{id}", s.handleUpdateCronJob)
-	mux.HandleFunc("DELETE /api/cron/{id}", s.handleDeleteCronJob)
+	// Protected routes
+	if s.auth != nil && s.auth.Enabled {
+		mux.HandleFunc("GET /api/config", s.auth.Middleware(s.handleGetConfig))
+		mux.HandleFunc("POST /api/config", s.auth.Middleware(s.handleUpdateConfig))
+		mux.HandleFunc("POST /api/test-provider", s.auth.Middleware(s.handleTestProvider))
+		mux.HandleFunc("POST /api/save-config", s.auth.Middleware(s.handleSaveConfig))
+		mux.HandleFunc("POST /api/chat", s.auth.Middleware(s.handleChat))
+		mux.HandleFunc("GET /api/agents", s.auth.Middleware(s.handleListAgents))
+		mux.HandleFunc("POST /api/agents", s.auth.Middleware(s.handleCreateAgent))
+		mux.HandleFunc("PUT /api/agents/{id}", s.auth.Middleware(s.handleUpdateAgent))
+		mux.HandleFunc("DELETE /api/agents/{id}", s.auth.Middleware(s.handleDeleteAgent))
+		mux.HandleFunc("GET /api/skills", s.auth.Middleware(s.handleListSkills))
+		mux.HandleFunc("DELETE /api/skills/{name}", s.auth.Middleware(s.handleDeleteSkill))
+		mux.HandleFunc("GET /api/plugins", s.auth.Middleware(s.handleListPlugins))
+		mux.HandleFunc("PUT /api/plugins/{id}", s.auth.Middleware(s.handleUpdatePlugin))
+		mux.HandleFunc("GET /api/tasks", s.auth.Middleware(s.handleListTasks))
+		mux.HandleFunc("GET /api/channels", s.auth.Middleware(s.handleListChannels))
+		mux.HandleFunc("GET /api/cron", s.auth.Middleware(s.handleListCronJobs))
+		mux.HandleFunc("POST /api/cron", s.auth.Middleware(s.handleCreateCronJob))
+		mux.HandleFunc("PUT /api/cron/{id}", s.auth.Middleware(s.handleUpdateCronJob))
+		mux.HandleFunc("DELETE /api/cron/{id}", s.auth.Middleware(s.handleDeleteCronJob))
+	} else {
+		mux.HandleFunc("GET /api/config", s.handleGetConfig)
+		mux.HandleFunc("POST /api/config", s.handleUpdateConfig)
+		mux.HandleFunc("POST /api/test-provider", s.handleTestProvider)
+		mux.HandleFunc("POST /api/save-config", s.handleSaveConfig)
+		mux.HandleFunc("POST /api/chat", s.handleChat)
+		mux.HandleFunc("GET /api/agents", s.handleListAgents)
+		mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
+		mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
+		mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
+		mux.HandleFunc("GET /api/skills", s.handleListSkills)
+		mux.HandleFunc("DELETE /api/skills/{name}", s.handleDeleteSkill)
+		mux.HandleFunc("GET /api/plugins", s.handleListPlugins)
+		mux.HandleFunc("PUT /api/plugins/{id}", s.handleUpdatePlugin)
+		mux.HandleFunc("GET /api/tasks", s.handleListTasks)
+		mux.HandleFunc("GET /api/channels", s.handleListChannels)
+		mux.HandleFunc("GET /api/cron", s.handleListCronJobs)
+		mux.HandleFunc("POST /api/cron", s.handleCreateCronJob)
+		mux.HandleFunc("PUT /api/cron/{id}", s.handleUpdateCronJob)
+		mux.HandleFunc("DELETE /api/cron/{id}", s.handleDeleteCronJob)
+	}
 
 	// OpenAI-compatible API and WebSocket gateway
 	if s.apiServer != nil {
