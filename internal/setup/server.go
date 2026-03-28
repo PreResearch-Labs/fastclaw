@@ -83,8 +83,8 @@ func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
 	// API routes
-	// Status is public (no auth required)
-	mux.HandleFunc("GET /api/status", s.handleStatus)
+	// Health check is public (minimal info for load balancers)
+	mux.HandleFunc("GET /api/health", s.handleHealth)
 
 	// Auth routes (public, no auth required)
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
@@ -102,6 +102,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// Protected routes
 	if s.auth != nil && s.auth.Enabled {
+		mux.HandleFunc("GET /api/status", s.auth.Middleware(s.handleStatus))
 		mux.HandleFunc("GET /api/config", s.auth.Middleware(s.handleGetConfig))
 		mux.HandleFunc("POST /api/config", s.auth.Middleware(s.handleUpdateConfig))
 		mux.HandleFunc("POST /api/test-provider", s.auth.Middleware(s.handleTestProvider))
@@ -122,6 +123,7 @@ func (s *Server) Run(ctx context.Context) error {
 		mux.HandleFunc("PUT /api/cron/{id}", s.auth.Middleware(s.handleUpdateCronJob))
 		mux.HandleFunc("DELETE /api/cron/{id}", s.auth.Middleware(s.handleDeleteCronJob))
 	} else {
+		mux.HandleFunc("GET /api/status", s.handleStatus)
 		mux.HandleFunc("GET /api/config", s.handleGetConfig)
 		mux.HandleFunc("POST /api/config", s.handleUpdateConfig)
 		mux.HandleFunc("POST /api/test-provider", s.handleTestProvider)

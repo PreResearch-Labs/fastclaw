@@ -127,7 +127,7 @@ func (s *SessionStore) GetFromRequest(r *http.Request) *Session {
 func IsPublicPath(path string) bool {
 	public := []string{
 		"/api/auth/login",
-		"/api/status",
+		"/api/health",
 		"/login",
 		"/_next/",
 		"/favicon.ico",

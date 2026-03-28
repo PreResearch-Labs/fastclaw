@@ -10,8 +10,9 @@ RUN pnpm build
 # Stage 2: Build Go binary
 FROM golang:alpine AS go-builder
 WORKDIR /app
-RUN apk add --no-cache git
+RUN apk add --no-cache git gcc musl-dev
 ENV GOTOOLCHAIN=auto
+ENV CGO_ENABLED=1
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ ./cmd/
@@ -20,7 +21,7 @@ COPY --from=web-builder /app/web/out ./internal/setup/web
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG DATE=""
-RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o /fastclaw ./cmd/fastclaw
+RUN go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o /fastclaw ./cmd/fastclaw
 
 # Stage 3: Runtime
 FROM alpine:3.20

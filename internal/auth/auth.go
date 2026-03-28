@@ -76,9 +76,6 @@ func (a *Auth) AdminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (a *Auth) GetSession(r *http.Request) *Session {
-	if !a.Enabled {
-		return nil
-	}
 	return a.Sessions.GetFromRequest(r)
 }
 

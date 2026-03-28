@@ -92,7 +92,11 @@ func runGateway(port int) error {
 		return fmt.Errorf("ensure default admin: %w", err)
 	}
 	if initialPassword != "" {
-		slog.Info("created default admin", "username", "admin", "password", initialPassword)
+		// Print to stderr for initial setup, not to log files
+		fmt.Fprintf(os.Stderr, "\n===========================================\n")
+		fmt.Fprintf(os.Stderr, "  Initial admin password: %s\n", initialPassword)
+		fmt.Fprintf(os.Stderr, "  Please save this password securely!\n")
+		fmt.Fprintf(os.Stderr, "===========================================\n\n")
 	}
 
 	sessionSecret := cfg.Auth.SessionSecret
@@ -101,8 +105,8 @@ func runGateway(port int) error {
 	}
 	sessions := auth.NewSessionStore(sessionSecret, cfg.Auth.SessionMaxAge)
 
-	// Enable auth if explicitly enabled OR if gateway mode is "public"
-	authEnabled := cfg.Auth.Enabled || cfg.Gateway.Mode == "public"
+	users, _ := userStore.List()
+	authEnabled := cfg.Auth.Enabled || cfg.Gateway.Mode == "public" || len(users) > 0
 	authObj := auth.NewAuth(userStore, sessions, authEnabled)
 
 	// Write PID file for daemon management
