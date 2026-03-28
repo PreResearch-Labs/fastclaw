@@ -14,6 +14,7 @@ import (
 
 	"github.com/fastclaw-ai/fastclaw/internal/agent"
 	"github.com/fastclaw-ai/fastclaw/internal/api"
+	"github.com/fastclaw-ai/fastclaw/internal/auth"
 	"github.com/fastclaw-ai/fastclaw/internal/config"
 	"github.com/fastclaw-ai/fastclaw/internal/daemon"
 	"github.com/fastclaw-ai/fastclaw/internal/gateway"
@@ -78,6 +79,32 @@ func runGateway(port int) error {
 
 	slog.Info("starting gateway")
 
+	// Initialize auth
+	homeDir, _ := config.HomeDir()
+	userStore, err := auth.NewUserStore(homeDir)
+	if err != nil {
+		return fmt.Errorf("init user store: %w", err)
+	}
+
+	// Ensure default admin exists
+	initialPassword, err := userStore.EnsureDefaultAdmin()
+	if err != nil {
+		return fmt.Errorf("ensure default admin: %w", err)
+	}
+	if initialPassword != "" {
+		slog.Info("created default admin", "username", "admin", "password", initialPassword)
+	}
+
+	sessionSecret := cfg.Auth.SessionSecret
+	if sessionSecret == "" {
+		sessionSecret = cfg.Gateway.Auth.Token
+	}
+	sessions := auth.NewSessionStore(sessionSecret, cfg.Auth.SessionMaxAge)
+
+	// Enable auth if explicitly enabled OR if gateway mode is "public"
+	authEnabled := cfg.Auth.Enabled || cfg.Gateway.Mode == "public"
+	authObj := auth.NewAuth(userStore, sessions, authEnabled)
+
 	// Write PID file for daemon management
 	if err := daemon.WritePIDFile(); err != nil {
 		slog.Warn("failed to write PID file", "error", err)
@@ -99,6 +126,7 @@ func runGateway(port int) error {
 	webSrv.SetAgentProvider(&agentProviderAdapter{mgr: gw.AgentManager()})
 	webSrv.SetTaskQueue(gw.TaskQueue())
 	webSrv.SetGatewayConfig(gwCfg)
+	webSrv.SetAuth(authObj)
 
 	// Set up OpenAI-compatible API and WebSocket gateway
 	gatewayToken := cfg.Gateway.Auth.Token
@@ -228,4 +256,3 @@ func openBrowser(url string) {
 	}
 	cmd.Run()
 }
-
