@@ -41,7 +41,7 @@ type Server struct {
 
 // NewServer creates a setup wizard server on the given port.
 func NewServer(port int, onConfig func(*config.Config)) *Server {
-	return &Server{port: port, bind: "loopback", onConfig: onConfig, startedAt: time.Now()}
+	return &Server{port: port, bind: "all", onConfig: onConfig, startedAt: time.Now()}
 }
 
 // SetGatewayConfig sets the gateway configuration for bind address and HTTP endpoints.

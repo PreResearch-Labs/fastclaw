@@ -1,0 +1,23 @@
+services:
+  fastclaw:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        DATE: ${DATE:-}
+    image: fastclaw:latest
+    container_name: fastclaw
+    ports:
+      - "18953:18953"
+    volumes:
+      - ./data:/root/.fastclaw
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:18953/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

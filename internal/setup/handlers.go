@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -58,10 +59,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			for name, prov := range cfg.Providers {
 				maskedKey := maskAPIKey(prov.APIKey)
 				resp["provider"] = map[string]string{
-					"name":   name,
-					"model":  cfg.Agents.Defaults.Model,
+					"name":    name,
+					"model":   cfg.Agents.Defaults.Model,
 					"apiBase": prov.APIBase,
-					"apiKey": maskedKey,
+					"apiKey":  maskedKey,
 				}
 				break // use first provider
 			}
@@ -148,8 +149,11 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Test connectivity by listing models (GET /models)
-	httpReq, err := http.NewRequestWithContext(r.Context(), "GET", strings.TrimRight(req.APIBase, "/")+"/models", nil)
+	apiBase := strings.TrimRight(req.APIBase, "/")
+	client := &http.Client{Timeout: 15 * time.Second}
+
+	// First try /models endpoint (standard OpenAI API)
+	httpReq, err := http.NewRequestWithContext(r.Context(), "GET", apiBase+"/models", nil)
 	if err != nil {
 		jsonResponse(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return
@@ -158,21 +162,69 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 		httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(httpReq)
+	if err == nil && resp.StatusCode == http.StatusOK {
+		resp.Body.Close()
+		jsonResponse(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	// Fallback: test with a minimal chat completion request
+	testModel := req.Model
+	if testModel == "" {
+		testModel = "gpt-3.5-turbo"
+	}
+	testBody := map[string]any{
+		"model":      testModel,
+		"messages":   []map[string]string{{"role": "user", "content": "test"}},
+		"max_tokens": 5,
+	}
+	bodyData, _ := json.Marshal(testBody)
+
+	httpReq2, err := http.NewRequestWithContext(r.Context(), "POST", apiBase+"/chat/completions", bytes.NewReader(bodyData))
 	if err != nil {
 		jsonResponse(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	defer resp.Body.Close()
+	httpReq2.Header.Set("Content-Type", "application/json")
+	if req.APIKey != "" {
+		httpReq2.Header.Set("Authorization", "Bearer "+req.APIKey)
+	}
 
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		jsonResponse(w, http.StatusOK, map[string]any{"ok": false, "error": fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(respBody))})
+	resp2, err := client.Do(httpReq2)
+	if err != nil {
+		jsonResponse(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	defer resp2.Body.Close()
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp2.Body, 1024))
+
+	if resp2.StatusCode == http.StatusOK {
+		jsonResponse(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]any{"ok": true})
+	// Some APIs return 400 for invalid model, but connection works
+	if resp2.StatusCode == http.StatusBadRequest {
+		var errResp map[string]any
+		if json.Unmarshal(respBody, &errResp) == nil {
+			if errMsg, ok := errResp["error"].(map[string]any); ok {
+				if msg, ok := errMsg["message"].(string); ok {
+					if strings.Contains(msg, "model") || strings.Contains(msg, "does not exist") {
+						// Connection works, just model issue
+						jsonResponse(w, http.StatusOK, map[string]any{"ok": true, "warning": "model not found, but API reachable"})
+						return
+					}
+				}
+			}
+		}
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]any{"ok": false, "error": fmt.Sprintf("HTTP %d: %s", resp2.StatusCode, string(respBody))})
 }
 
 type chatRequest struct {

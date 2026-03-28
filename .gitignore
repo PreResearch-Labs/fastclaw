@@ -41,6 +41,10 @@ vendor/
 # Config with secrets (users create their own)
 config.json
 
+# Docker mounted data
+data/
+!data/.gitkeep
+
 # Debug
 debug/
 __debug_bin*
@@ -57,3 +61,6 @@ web/node_modules/
 web/.next/
 
 *.json
+.llmenv
+qwen-rnd-lifecycle-network.yaml
+.agents/skills/using-superpowers/SKILL.md
