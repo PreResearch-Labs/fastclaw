@@ -38,10 +38,9 @@ type HeartbeatCfg struct {
 // Default: file-based. For cloud multi-tenant: "postgres" or "sqlite".
 type StorageCfg struct {
 	Type        string `json:"type,omitempty"`        // "file" (default), "postgres", "sqlite"
-	DSN         string `json:"dsn,omitempty"`          // database connection string
+	DSN         string `json:"dsn,omitempty"`         // database connection string
 	AutoMigrate bool   `json:"autoMigrate,omitempty"` // auto-create tables on startup
 }
-
 
 // WebSearchCfg configures web search.
 type WebSearchCfg struct {
@@ -53,15 +52,15 @@ type WebSearchCfg struct {
 type HooksCfg struct {
 	Enabled bool   `json:"enabled,omitempty"`
 	Token   string `json:"token,omitempty"`
-	Path    string `json:"path,omitempty"`  // default "/hooks"
-	Port    int    `json:"port,omitempty"`  // default 18954
+	Path    string `json:"path,omitempty"` // default "/hooks"
+	Port    int    `json:"port,omitempty"` // default 18954
 }
 
 // PluginsCfg configures the plugin system.
 type PluginsCfg struct {
-	Enabled bool                       `json:"enabled"`
-	Paths   []string                   `json:"paths,omitempty"`
-	Entries map[string]PluginEntryCfg  `json:"entries,omitempty"`
+	Enabled bool                      `json:"enabled"`
+	Paths   []string                  `json:"paths,omitempty"`
+	Entries map[string]PluginEntryCfg `json:"entries,omitempty"`
 }
 
 // PluginEntryCfg is per-plugin configuration.
@@ -85,7 +84,7 @@ type SandboxCfg struct {
 
 // GatewayAuth holds authentication settings for the gateway API.
 type GatewayAuth struct {
-	Mode  string `json:"mode,omitempty"`  // "token" (default), "none"
+	Mode  string `json:"mode,omitempty"` // "token" (default), "none"
 	Token string `json:"token"`
 }
 
@@ -107,11 +106,11 @@ type GatewayHTTP struct {
 
 // GatewayCfg holds gateway server configuration.
 type GatewayCfg struct {
-	Port int          `json:"port,omitempty"`
-	Mode string       `json:"mode,omitempty"`  // "local" (default), "public"
-	Bind string       `json:"bind,omitempty"`  // "loopback" (default), "all"
-	Auth GatewayAuth  `json:"auth,omitempty"`
-	HTTP GatewayHTTP  `json:"http,omitempty"`
+	Port int         `json:"port,omitempty"`
+	Mode string      `json:"mode,omitempty"` // "local" (default), "public"
+	Bind string      `json:"bind,omitempty"` // "loopback" (default), "all"
+	Auth GatewayAuth `json:"auth,omitempty"`
+	HTTP GatewayHTTP `json:"http,omitempty"`
 }
 
 // Config is the top-level configuration loaded from ~/.fastclaw/fastclaw.json.
@@ -131,6 +130,7 @@ type Config struct {
 	Gateway    GatewayCfg                 `json:"gateway,omitempty"`
 	TaskQueue  TaskQueueCfg               `json:"taskQueue,omitempty"`
 	Skills     SkillsCfg                  `json:"skills,omitempty"`
+	Auth       AuthConfig                 `json:"auth,omitempty"`
 }
 
 // ModelCost holds pricing info for a model.
@@ -143,13 +143,13 @@ type ModelCost struct {
 
 // ModelEntry describes a single model within a provider.
 type ModelEntry struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Reasoning     bool     `json:"reasoning"`
-	Input         []string `json:"input"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Reasoning     bool      `json:"reasoning"`
+	Input         []string  `json:"input"`
 	Cost          ModelCost `json:"cost"`
-	ContextWindow int      `json:"contextWindow"`
-	MaxTokens     int      `json:"maxTokens"`
+	ContextWindow int       `json:"contextWindow"`
+	MaxTokens     int       `json:"maxTokens"`
 }
 
 // ProviderConfig holds API credentials for an LLM provider.
@@ -189,7 +189,7 @@ type AgentEntry struct {
 	AlwaysLoadSkills  []string                   `json:"alwaysLoadSkills,omitempty"`
 	Thinking          string                     `json:"thinking,omitempty"` // off, low, medium, high, adaptive
 	Sandbox           SandboxCfg                 `json:"sandbox,omitempty"`
-	PolicyPreset      string                     `json:"policy,omitempty"`  // "permissive", "standard", "restricted"
+	PolicyPreset      string                     `json:"policy,omitempty"` // "permissive", "standard", "restricted"
 }
 
 // ChannelConfig holds per-channel configuration with optional accounts.
@@ -292,6 +292,20 @@ type TeamConfig struct {
 	Name    string            `json:"name"`
 	Agents  []string          `json:"agents"`
 	Routing map[string]string `json:"routing"`
+}
+
+// AuthConfig holds authentication settings for Web UI.
+type AuthConfig struct {
+	Enabled       bool   `json:"enabled,omitempty"`
+	SessionSecret string `json:"sessionSecret,omitempty"`
+	SessionMaxAge int    `json:"sessionMaxAge,omitempty"` // seconds, default 86400
+}
+
+// UserConfig holds a user entry in config (for bootstrapping).
+type UserConfig struct {
+	Username string `json:"username"`
+	Password string `json:"password,omitempty"` // plaintext, converted to hash on first run
+	Role     string `json:"role,omitempty"`     // "admin" or "user"
 }
 
 // HomeDir returns the FastClaw home directory (~/.fastclaw).

@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getStatus } from "@/lib/api";
+import { getMe } from "@/lib/auth";
 
 export default function RootRedirect() {
   const router = useRouter();
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    getStatus()
-      .then((status) => {
+    Promise.all([getStatus(), getMe()])
+      .then(([status, user]) => {
+        if (!user) {
+          router.replace("/login");
+          return;
+        }
         if (status.configured) {
           router.replace("/overview/");
         } else {
@@ -17,8 +23,9 @@ export default function RootRedirect() {
         }
       })
       .catch(() => {
-        router.replace("/onboard/");
-      });
+        router.replace("/login");
+      })
+      .finally(() => setChecking(false));
   }, [router]);
 
   return (
