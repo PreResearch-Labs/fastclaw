@@ -18,7 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Database, Webhook, Save, Check, Users, Trash2, KeyRound, UserPlus } from "lucide-react";
 import { getConfig, updateConfig, type ConfigResponse } from "@/lib/api";
-import { useAuth, getUsers, createUser, deleteUser, resetUserPassword, type User } from "@/lib/auth";
+import { useAuth } from "@/components/auth-guard";
+import { getUsers, createUser, deleteUser, resetUserPassword, changePassword, type User } from "@/lib/auth";
 
 export default function SettingsPage() {
   const [config, setConfig] = useState<ConfigResponse | null>(null);
@@ -101,11 +102,20 @@ export default function SettingsPage() {
     setUsers(users.filter((u) => u.id !== id));
   };
 
-  const handleResetPassword = async (id: string) => {
+  const handleResetPassword = async (id: string, isOwn: boolean) => {
     const password = prompt("Enter new password (min 8 characters):");
     if (!password || password.length < 8) return;
-    await resetUserPassword(id, password);
-    alert("Password reset successfully");
+    try {
+      if (isOwn) {
+        await changePassword(password);
+      } else {
+        await resetUserPassword(id, password);
+      }
+      alert("Password changed successfully");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to change password");
+    }
   };
 
   if (loading) {
@@ -265,7 +275,7 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Password"
                   />
-                  <Select value={newRole} onValueChange={setNewRole}>
+                  <Select value={newRole} onValueChange={(v) => v && setNewRole(v)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -301,8 +311,8 @@ export default function SettingsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleResetPassword(u.id)}
-                            disabled={u.id === user?.id}
+                            onClick={() => handleResetPassword(u.id, u.id === user?.id)}
+                            title={u.id === user?.id ? "Change your password" : "Reset user password"}
                           >
                             <KeyRound className="h-4 w-4" />
                           </Button>
@@ -311,6 +321,7 @@ export default function SettingsPage() {
                             size="sm"
                             onClick={() => handleDeleteUser(u.id)}
                             disabled={u.id === user?.id}
+                            title={u.id === user?.id ? "Cannot delete yourself" : "Delete user"}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
